@@ -1,0 +1,36 @@
+.history-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.history-item {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.history-item button {
+    background: var(--primary-pink);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.history-item button:hover {
+    background: var(--dark-pink);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .history-container {
+        padding: 16px;
+    }
+}

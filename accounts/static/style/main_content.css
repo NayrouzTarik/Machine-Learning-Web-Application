@@ -1,0 +1,16 @@
+/* MAIN content AREA STYLE */
+.main-content {
+    margin-left: 80px;
+    flex: 1;
+    padding: 24px;
+    background-color: var(--bg-darker);
+}
+
+/* Section visibility */
+section {
+    display: none;
+}
+
+section.active {
+    display: block;
+}

@@ -1,0 +1,70 @@
+/* Model Selection Section */
+#selection-section {
+    padding: 2rem;
+    background: var(--bg-darker);
+    border-radius: 8px;
+}
+
+.data-guidance {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 2rem;
+    border-left: 4px solid var(--primary-pink);
+}
+
+.data-guidance p {
+    color: var(--text-light);
+    font-size: 1rem;
+}
+
+#dataTypeRecommendation {
+    color: var(--light-pink);
+    font-weight: bold;
+}
+
+.models-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.model-category {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.model-category h3 {
+    color: var(--light-pink);
+    margin-bottom: 1.5rem;
+    font-size: 1.2rem;
+}
+
+.model-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.model-btn {
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: var(--text-light);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.model-btn:hover {
+    background: rgba(212, 54, 125, 0.2);
+    border-color: var(--primary-pink);
+    transform: translateY(-2px);
+}
+
+.model-btn.selected {
+    background: var(--primary-pink);
+    border-color: var(--dark-pink);
+    color: white;
+}
