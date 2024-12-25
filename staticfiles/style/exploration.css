@@ -1,0 +1,53 @@
+/* Exploration Section Layout */
+#exploration-section {
+    height: calc(100vh - 100px);
+    padding: 2rem;
+    background: linear-gradient(145deg, rgba(26, 26, 26, 0.8), rgba(20, 20, 20, 0.9));
+    border-radius: 20px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 105, 180, 0.1);
+}
+
+.charts-container {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 10px;
+    margin-bottom: 80px; /* Space for buttons */
+}
+
+/* Change this to force single column */
+.charts-grid {
+    display: flex;
+    flex-direction: column; /* Forces single column layout */
+    gap: 2rem;
+    width: 100%;
+}
+
+/* Adjust chart container for single column */
+.chart-container {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+    padding: 1.5rem;
+}
+
+#statistics-display,
+#categorical-analysis {
+    width: 100%;
+}
+
+/* Fixed position for step buttons */
+#exploration-section .step-buttons {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(180deg, transparent, rgba(20, 20, 20, 0.95) 20%);
+    padding: 2rem;
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    z-index: 10;
+}

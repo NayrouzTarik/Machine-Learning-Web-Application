@@ -277,14 +277,6 @@ def run_model(request):
             print("Cleaned data loaded successfully")
             print(df_cleaned.head())  
 
-            if target_type == 'classification':
-                df_filtered = df_cleaned[df_cleaned.select_dtypes(include=['object', 'category']).notnull().any(axis=1)]
-            elif target_type == 'clustering':
-                df_filtered = df_cleaned[df_cleaned.select_dtypes(include=['number']).notnull().any(axis=1)]
-            elif target_type == 'regression':
-                df_filtered = df_cleaned[df_cleaned.select_dtypes(include=['number']).notnull().any(axis=1)]
-            else:
-                return JsonResponse({"error": "Unknown target type."}, status=400)
 
             if selected_model == 'decision-tree':
                 model, metrics = DT(df_filtered)
@@ -327,42 +319,59 @@ def run_model(request):
 
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
-
 @csrf_exempt
 def get_compatible_features(request):
-    if request.method == 'POST':
-        try:
-            cleaned_data_json = request.session.get('cleaned_data')
-            if not cleaned_data_json:
-                return JsonResponse({"error": "No cleaned data found"}, status=400)
-            
-            data = json.loads(request.body)
-            target_type = data.get('target_type')
-            
-            df = pd.read_json(StringIO(cleaned_data_json))
-            
-            # Filter columns based on target type
-            if target_type == 'classification':
-                # For classification, include object/category columns
-                features = df.select_dtypes(include=['object', 'category']).columns.tolist()
-            elif target_type == 'regression':
-                # For regression, include numeric columns
-                features = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
-            elif target_type == 'clustering':
-                # For clustering, return empty list as no target needed
-                features = []
-            else:
-                return JsonResponse({"error": "Invalid target type"}, status=400)
-                
-            print(f"Target type: {target_type}")
-            print(f"Available features: {features}")
-            print(f"DataFrame dtypes:\n{df.dtypes}")
-            
-            return JsonResponse(features, safe=False)
-            
-        except Exception as e:
-            print(f"Error in get_compatible_features: {str(e)}")
-            return JsonResponse({"error": str(e)}, status=500)
+    try:
+        data = json.loads(request.body)
+        target_type = data.get('target_type')
+        
+        # Get DataFrame from session
+        df_json = request.session.get('df')
+        if not df_json:
+            return JsonResponse({'error': 'No data available'}, status=400)
+        
+        df = pd.read_json(df_json)
+        
+        # Filter features based on type
+        features = []
+        for column in df.columns:
+            dtype = str(df[column].dtype)
+            if target_type == 'regression':
+                if dtype in ['int64', 'float64']:
+                    features.append({
+                        'name': column,
+                        'dtype': dtype,
+                        'unique_count': len(df[column].unique())
+                    })
+            elif target_type == 'classification':
+                if dtype in ['object', 'category'] or (dtype in ['int64', 'float64'] and len(df[column].unique()) < 10):
+                    features.append({
+                        'name': column,
+                        'dtype': dtype,
+                        'unique_count': len(df[column].unique())
+                    })
+                    
+        return JsonResponse({
+            'features': features,
+            'recommendation': detect_problem_type(df)
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+def detect_problem_type(df):
+    categorical_threshold = 10
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    categorical_cols = df.select_dtypes(include=['object', 'category']).columns
     
-    return JsonResponse({"error": "Method not allowed"}, status=405)
+    # Count columns that look like categorical targets
+    potential_categorical_targets = len([col for col in numeric_cols 
+                                      if df[col].nunique() < categorical_threshold])
+    
+    if len(categorical_cols) > 0 or potential_categorical_targets > 0:
+        return 'classification'
+    elif len(numeric_cols) > 0:
+        return 'regression'
+    else:
+        return 'clustering'
 
