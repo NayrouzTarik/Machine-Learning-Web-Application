@@ -279,32 +279,32 @@ def run_model(request):
 
 
             if selected_model == 'decision-tree':
-                model, metrics = DT(df_filtered)
+                model, metrics = DT(df_cleaned)
                 results = {"accuracy": metrics[0], "precision": metrics[1],
                            "recall": metrics[2], "f1": metrics[3]}
             elif selected_model == 'svm':
-                model, metrics = SVM(df_filtered)
+                model, metrics = SVM(df_cleaned)
                 results = {"model_metrics": metrics}
             elif selected_model == 'random-forest':
-                model, train_metric, test_metric = RF(df_filtered)
+                model, train_metric, test_metric = RF(df_cleaned)
                 results = {"train_metric": train_metric, "test_metric": test_metric}
             elif selected_model == 'knn':
-                model, train_metric, test_metric = KNN(df_filtered)
+                model, train_metric, test_metric = KNN(df_cleaned)
                 results = {"train_metric": train_metric, "test_metric": test_metric}
             elif selected_model == 'neural-network':
-                model, metrics = MLP_model(df_filtered)
+                model, metrics = MLP_model(df_cleaned)
                 results = {"model_metrics": metrics}
             elif selected_model == 'k-means':
-                model, metrics = KMeans(df_filtered)
+                model, metrics = KMeans(df_cleaned)
                 results = {"model_metrics": metrics}
             elif selected_model == 'naive-bayes':
-                model, accuracy, report = naive_bayes(df_filtered)
+                model, accuracy, report = naive_bayes(df_cleaned)
                 results = {
                     "accuracy": accuracy,
                     "classification_report": report
                 }
             elif selected_model == 'regression':
-                results = regression_model(df_filtered)
+                results = regression_model(df_cleaned)
             else:
                 return JsonResponse({"error": "Unknown model."}, status=400)
 
