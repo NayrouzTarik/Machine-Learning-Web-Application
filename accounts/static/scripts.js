@@ -8,10 +8,21 @@ document.addEventListener('DOMContentLoaded', () => {
     addCollapsibleSectionStyles();
     initializeTargetTypeSelection();
     initializePlotting(); 
+    addNextStepButtonListener(); 
 });
 
+function addNextStepButtonListener() {
+    const nextStepButton = document.querySelector('.next-step[data-next="plot-section"]');
+    if (nextStepButton) {
+        nextStepButton.addEventListener('click', async function(event) {
+            event.preventDefault();
+            await cleanData();
+            handleStepButtonClick(this, 'next');
+        });
+    }
+}
 
-let currentChart = null; // Declare currentChart in the global scope
+let currentChart = null; 
 
 function initializePlotting() {
     const plotTypeSelect = document.getElementById('plot-type');
@@ -82,6 +93,18 @@ function initializePlotting() {
         });
     }
 
+    function clearChart() {
+        if (currentChart) {
+            currentChart.destroy();
+            currentChart = null;
+        }
+        const plotCanvas = document.getElementById('plot-canvas');
+        if (plotCanvas) {
+            const ctx = plotCanvas.getContext('2d');
+            ctx.clearRect(0, 0, plotCanvas.width, plotCanvas.height);
+        }
+    }
+    
     async function fetchVariables() {
         try {
             console.log('Starting fetchVariables');
@@ -144,13 +167,13 @@ function initializePlotting() {
         const plotType = plotTypeSelect.value;
         const xVariable = xVariableSelect.value;
         const yVariable = yVariableSelect.value;
-
+    
         console.log('Selected values:', { plotType, xVariable, yVariable }); // Debug log
-
+    
         try {
             validatePlotRequirements(plotType, xVariable, yVariable);
             clearChart();
-
+    
             const response = await fetch(
                 `/get-plot-data/?x_variable=${xVariable}&y_variable=${yVariable}&plot_type=${plotType}`,
                 {
@@ -161,8 +184,10 @@ function initializePlotting() {
                     }
                 }
             );
-
+    
             const data = await response.json();
+            console.log('Fetched plot data:', data); // Debug log
+    
             if (data.success) {
                 const config = createChartConfig(plotType, xVariable, yVariable, data.plot_data);
                 currentChart = new Chart(plotCanvas.getContext('2d'), config);
@@ -174,119 +199,13 @@ function initializePlotting() {
             console.error('Error generating plot:', error);
         }
     });
-
+    
     // Initial fetch
     console.log('Initializing plotting module');
     fetchVariables();
 }
 
-function clearChart() {
-    if (currentChart) {
-        currentChart.destroy();
-        currentChart = null;
-    }
-}
-
 function validatePlotRequirements(plotType, xVariable, yVariable) {
-    // Add validation logic based on plot type and selected variables
-    if (!plotType) {
-        throw new Error('Please select a plot type.');
-    }
-    if (!xVariable) {
-        throw new Error('Please select an X variable.');
-    }
-    if (plotType !== 'histogram' && !yVariable) {
-        throw new Error('Please select a Y variable.');
-    }
-}
-
-function createChartConfig(plotType, xVariable, yVariable, plotData) {
-    // Add logic to create chart configuration based on plot type and data
-    let config = {};
-
-    switch (plotType) {
-        case 'histogram':
-            config = {
-                type: 'bar',
-                data: {
-                    labels: plotData.labels,
-                    datasets: [{
-                        label: xVariable,
-                        data: plotData.values,
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    scales: {
-                        x: {
-                            beginAtZero: true
-                        }
-                    }
-                }
-            };
-            break;
-        case 'scatter':
-            config = {
-                type: 'scatter',
-                data: {
-                    datasets: [{
-                        label: `Scatter Plot of ${xVariable} vs ${yVariable}`,
-                        data: plotData.points,
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    scales: {
-                        x: {
-                            type: 'linear',
-                            position: 'bottom'
-                        }
-                    }
-                }
-            };
-            break;
-        case 'bar':
-            config = {
-                type: 'bar',
-                data: {
-                    labels: plotData.labels,
-                    datasets: [{
-                        label: yVariable,
-                        data: plotData.values,
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    }
-                }
-            };
-            break;
-        default:
-            throw new Error('Unsupported plot type.');
-    }
-
-    return config;
-}
-
-function clearChart() {
-    if (currentChart) {
-        currentChart.destroy();
-        currentChart = null;
-    }
-}
-
-function validatePlotRequirements(plotType, xVariable, yVariable) {
-    // Add validation logic based on plot type and selected variables
     if (!plotType) {
         throw new Error('Please select a plot type.');
     }
@@ -412,7 +331,7 @@ async function fetchCompatibleFeatures(targetType) {
 
 
 function populateFeaturesDropdown(dropdown, features) {
-    dropdown.innerHTML = ''; // Clear existing options
+    dropdown.innerHTML = ''; 
     features.forEach(feature => {
         const option = document.createElement('option');
         option.value = feature.name;
@@ -645,7 +564,6 @@ function updateVisualization(results) {
     let data, layout;
 
     if ('accuracy' in results) {
-        // Classification metrics
         data = [{
             x: ['Accuracy', 'Precision', 'Recall', 'F1'],
             y: [
@@ -781,14 +699,15 @@ function initializeWorkflowNavigation() {
     const prevStepButtons = document.querySelectorAll('.prev-step');
 
     nextStepButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            handleStepButtonClick(this, 'next');
-        });
+        button.addEventListener('click', handleNextStep);
     });
 
     prevStepButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            handleStepButtonClick(this, 'prev');
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            const currentSection = this.closest('.workflow-content');
+            const targetSectionId = this.dataset.prev;
+            moveToSection(currentSection, targetSectionId);
         });
     });
 }
@@ -803,7 +722,10 @@ function handleStepButtonClick(button, direction) {
         targetSection.classList.add('active');
     }
     if (targetSectionId === 'selection-section') {
-        cleanData();
+        if (!cleanedData) {
+            alert('Please clean the data first.');
+            return;
+        }
     }
 }
 
@@ -863,10 +785,11 @@ function createFilePreview(file) {
     return preview;
 }
 
+
 function handleUploadFormSubmit(e) {
     e.preventDefault();
     const formData = new FormData(this);
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const csrfToken = getCsrfToken();
 
     fetch('/upload/', {
         method: 'POST',
@@ -876,19 +799,17 @@ function handleUploadFormSubmit(e) {
         },
         credentials: 'same-origin'
     })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-        return response.json();
-    })
+    .then(response => response.json())
     .then(data => {
-        console.log('Data received:', data); // Add this line
         if (data.success) {
-            updateStatisticsDisplay(data);
-            moveToNextSection('exploration-section');
+            alert('File uploaded successfully!');
+            // Enable next button
+            const nextButton = document.querySelector('.next-step[data-next="exploration-section"]');
+            if (nextButton) {
+                nextButton.disabled = false;
+            }
         } else {
-            alert('Upload failed. Please try again.');
+            throw new Error(data.error || 'Upload failed');
         }
     })
     .catch(error => {
@@ -897,25 +818,113 @@ function handleUploadFormSubmit(e) {
     });
 }
 
-function updateStatisticsDisplay(data) {
-    const dataTypeRecommendationElement = document.getElementById('dataTypeRecommendation');
-    console.log('Data Type Recommendation Element in updateStatisticsDisplay:', dataTypeRecommendationElement); // Debugging statement
+function moveToSection(currentSection, targetSectionId) {
+    const targetSection = document.getElementById(targetSectionId);
+    if (currentSection && targetSection) {
+        document.querySelectorAll('.workflow-content').forEach(section => {
+            section.classList.remove('active');
+        });
+        targetSection.classList.add('active');
+    }
+}
 
-    if (dataTypeRecommendationElement) {
-        dataTypeRecommendationElement.textContent = data.statistics.task_type;
+let isProcessing = false;
+
+function handleNextStep(e) {
+    e.preventDefault();
+    if (isProcessing) return;
+    
+    const button = e.target;
+    const currentSection = button.closest('.workflow-content');
+    const targetSectionId = button.dataset.next;
+    
+    // Special handling for upload to exploration transition
+    if (targetSectionId === 'exploration-section') {
+        isProcessing = true;
+        button.disabled = true;
+        button.textContent = 'Processing...';
+        
+        processUploadedData()
+            .then(success => {
+                if (success) {
+                    moveToSection(currentSection, targetSectionId);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Processing failed. Please try again.');
+            })
+            .finally(() => {
+                isProcessing = false;
+                button.disabled = false;
+                button.textContent = 'Next Step';
+            });
     } else {
-        console.error('Data Type Recommendation element not found in updateStatisticsDisplay');
+        // Handle other section transitions directly
+        moveToSection(currentSection, targetSectionId);
+    }
+}
+
+async function processUploadedData() {
+    try {
+        const response = await fetch('/process_data/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            credentials: 'same-origin'
+        });
+        
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            updateStatisticsDisplay(data.statistics);
+            return true;
+        }
+        throw new Error(data.error || 'Processing failed');
+    } catch (error) {
+        console.error('Error:', error);
+        return false;
+    }
+}
+
+function updateStatisticsDisplay(statistics) {
+    const statisticsDisplay = document.getElementById('statistics-display');
+    if (!statisticsDisplay) return;
+
+    let html = '<div class="statistics-summary">';
+    
+    // Basic dataset information
+    html += createBasicStats(statistics);
+    
+    // Null values analysis
+    if (statistics.null_values) {
+        html += createCollapsibleSection('Null Values Analysis', 
+            formatNullValues(statistics.null_values));
     }
 
-    const statsDisplay = document.getElementById('statistics-display');
-    const basicStats = createBasicStats(data.statistics);
-    const nullValuesSection = createCollapsibleSection('Null Values', formatNullValues(data.statistics.null_values));
-    const categoricalAnalysisSection = createCollapsibleSection('Categorical Analysis', formatCategoricalAnalysis(data.statistics.category_analysis));
-    const summaryStatsSection = createCollapsibleSection('Summary Statistics', formatSummaryStats(data.statistics));
-    const correlationMatrixSection = createCollapsibleSection('Correlation Matrix', formatCorrelationMatrix(data.statistics.correlation_with_all_variables));
-    statsDisplay.innerHTML = basicStats + nullValuesSection + categoricalAnalysisSection + summaryStatsSection + correlationMatrixSection;
+    // Categorical analysis
+    if (statistics.category_analysis) {
+        html += createCollapsibleSection('Categorical Analysis', 
+            formatCategoricalAnalysis(statistics.category_analysis));
+    }
 
-    addCollapsibleSectionStyles();
+    // Numeric analysis
+    if (statistics.mean_values) {
+        html += createCollapsibleSection('Numeric Analysis', 
+            formatSummaryStats(statistics));
+    }
+
+    // Correlation matrix
+    if (statistics.correlation_with_all_variables) {
+        html += createCollapsibleSection('Correlation Matrix', 
+            formatCorrelationMatrix(statistics.correlation_with_all_variables));
+    }
+
+    html += '</div>';
+    statisticsDisplay.innerHTML = html;
 }
 
 function createBasicStats(statistics) {

@@ -19,6 +19,8 @@ from django.views.decorators.csrf import csrf_exempt
 import json
 import numpy as np
 from io import StringIO
+import chardet
+import csv
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -50,169 +52,77 @@ def get_user_data_dir(user):
     else:
         print(f"Directory already exists: {user_data_dir}")
     return user_data_dir
-
-def process_data(file_path):
+def read_file_with_encoding_and_delimiter(file_path):
+    """
+    Lit un fichier CSV ou Excel avec détection automatique d'encodage et de délimiteur.
+    """
     try:
-        file_extension = os.path.splitext(file_path)[1].lower()
+        file_extension = file_path.split('.')[-1].lower()
+        if file_extension not in ['csv', 'xls', 'xlsx']:
+            raise ValueError("Unsupported file type")
 
-        if file_extension == '.csv':
-            data = None
-            success = False
-            delimiters = [';', ',', '\t']
-            encodings = ['utf-8', 'latin1', 'iso-8859-1']
+        if file_extension == 'csv':
+            # Détection d'encodage
+            with open(file_path, 'rb') as f:
+                result = chardet.detect(f.read())
+                detected_encoding = result['encoding']
 
-            for delimiter in delimiters:
-                if success:
-                    break
-                for encoding in encodings:
-                    try:
-                        temp_data = pd.read_csv(
-                            file_path,
-                            delimiter=delimiter,
-                            encoding=encoding,
-                            quotechar='"',
-                            on_bad_lines='warn'
-                        )
-                        # Validate proper parsing
-                        if len(temp_data.columns) > 1:
-                            data = temp_data
-                            print(f"Successfully read with delimiter: {delimiter}, encoding: {encoding}")
-                            success = True
-                            break
-                    except Exception as e:
-                        print(f"Failed with delimiter: {delimiter}, encoding: {encoding}, error: {str(e)}")
-                        continue
+            # Détection du délimiteur
+            with open(file_path, 'r', encoding=detected_encoding) as csvfile:
+                sniffer = csv.Sniffer()
+                sample = csvfile.read(1024)
+                delimiter = sniffer.sniff(sample).delimiter
 
-            if not success:
-                return {"error": "Unable to read CSV file with any delimiter or encoding"}
-
-        elif file_extension in ['.xls', '.xlsx']:
-            data = pd.read_excel(file_path)
+            # Lire le fichier avec les paramètres détectés
+            df = pd.read_csv(file_path, encoding=detected_encoding, delimiter=delimiter)
+        elif file_extension in ['xls', 'xlsx']:
+            # Lire un fichier Excel
+            df = pd.read_excel(file_path)
         else:
-            return {"error": "Unsupported file type"}
-
-        # Clean column names
-        data.columns = [str(col).strip().strip('"').strip("'") for col in data.columns]
-
-        # Remove any completely empty columns or rows
-        data = data.dropna(how='all', axis=1).dropna(how='all', axis=0)
-
-        # Handle NaN values
-        data = data.fillna('')
-
-        # Basic statistics
-        statistics = {
-            "columns": data.columns.tolist(),
-            "shape": data.shape,
-            "null_values": data.isnull().sum().to_dict(),
-            "duplicates_count": data.duplicated().sum(),
-            "dtypes": data.dtypes.astype(str).to_dict(),
-        }
-
-        try:
-            # Numeric analysis
-            numeric_data = data.select_dtypes(include=['number'])
-            if not numeric_data.empty:
-                statistics.update({
-                    'mean_values': numeric_data.mean().to_dict(),
-                    'variance_values': numeric_data.var().to_dict(),
-                    'std_values': numeric_data.std().to_dict(),
-                    'correlation_with_all_variables': numeric_data.corr().to_dict()
-                })
-
-            # Categorical analysis
-            categorical_data = data.select_dtypes(include=['object', 'category'])
-            if not categorical_data.empty:
-                category_stats = {}
-                for col in categorical_data.columns:
-                    category_stats[col] = categorical_data[col].value_counts().to_dict()
-                statistics['category_analysis'] = category_stats
-
-            # Target column detection
-            target_column, task_type = detect_target_column(data)
-            statistics['target_column'] = target_column
-            statistics['task_type'] = task_type
-
-        except Exception as e:
-            print(f"Error in statistical analysis: {str(e)}")
-            statistics['analysis_error'] = str(e)
-
-        return statistics
-
+            raise ValueError("Unsupported file type")
+        
+        return df
     except Exception as e:
-        print(f"Error processing file {file_path}: {e}")
-        return {"error": str(e)}
+        raise ValueError(f"Error reading file: {str(e)}")
+    
+import pandas as pd
+import os
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
 
 @login_required
 def upload_data(request):
     if request.method == 'POST' and request.FILES.get('file'):
         try:
+            # Récupérer l'utilisateur et le fichier
             user = request.user
             file = request.FILES['file']
 
-            user_data_dir = get_user_data_dir(user)
+            # Créer un répertoire utilisateur si nécessaire
+            user_data_dir = get_user_data_dir(user)  # Assurez-vous que cette fonction existe
             os.makedirs(user_data_dir, exist_ok=True)
-            file_path = os.path.join(user_data_dir, file.name)
 
+            # Sauvegarder le fichier dans le répertoire utilisateur
+            file_path = os.path.join(user_data_dir, file.name)
             with open(file_path, 'wb+') as f:
                 for chunk in file.chunks():
                     f.write(chunk)
 
-            statistics = process_data(file_path)
-            if 'error' in statistics:
-                return JsonResponse({
-                    'success': False,
-                    'error': statistics['error']
-                })
+            # Charger et afficher les données dans le terminal
+            df = read_file_with_encoding_and_delimiter(file_path)
+            print("\n\nDonnées uploadées :\n", df.head())
 
-            print("\n\nStatistiques des données :\n")
-            print(f"Dimensions des données : {statistics['shape']}")
-            print(f"Nombre de doublons : {statistics['duplicates_count']}")
+            # Sauvegarder les informations du fichier dans la session
+            request.session['uploaded_file_path'] = file_path
 
-            dtypes_df = pd.DataFrame.from_dict(statistics['dtypes'], orient='index', columns=['Type'])
-            print("\nTypes des colonnes :\n", dtypes_df)
-
-            null_values_df = pd.DataFrame.from_dict(statistics['null_values'], orient='index', columns=['Null Values'])
-            print("\nValeurs nulles par colonne :\n", null_values_df)
-
-            summary_stats_df = pd.DataFrame({
-                'Mean': statistics['mean_values'],
-                'Variance': statistics['variance_values'],
-                'Std Dev': statistics['std_values']
-            })
-            print("\nStatistiques résumées :\n", summary_stats_df)
-
-            print("\nMatrice de corrélation :\n", statistics['correlation_with_all_variables'])
-
-            print("\nAnalyse des colonnes catégoriques :")
-            for col, counts in statistics['category_analysis'].items():
-                print(f"\nColonne '{col}' :\n", pd.DataFrame.from_dict(counts, orient='index', columns=['Occurrences']))
-
-            print(f"\nColonne cible : {statistics['target_column']}")
-            print(f"Type de tâche : {statistics['task_type']}")
-
-            serializable_stats = json.loads(json.dumps(statistics, cls=NumpyEncoder))
-
-            file_extension = os.path.splitext(file_path)[1].lower()
-            if file_extension == '.csv':
-                df = pd.read_csv(file_path)
-            elif file_extension in ['.xls', '.xlsx']:
-                df = pd.read_excel(file_path)
-            else:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Unsupported file type'
-                })
-
-            df = df.fillna('')
-
-            request.session['df'] = df.to_json()
-            request.session['statistics'] = serializable_stats
+            # Appeler la fonction process_data et afficher les statistiques dans le terminal
+            # statistics = process_data(request)
+            # print("\n\nStatistiques générées :\n", statistics)
 
             return JsonResponse({
                 'success': True,
-                'message': 'File uploaded successfully',
-                'statistics': serializable_stats
+                'message': 'File uploaded and saved successfully',
+                'file_path': file_path,
             })
 
         except Exception as e:
@@ -226,9 +136,62 @@ def upload_data(request):
         'error': 'No file provided'
     })
 
-def process(request):
-    return render(request, 'process.html')
+from django.views.decorators.http import require_http_methods
+@login_required
+@require_http_methods(["POST"])
+def process_data(request):
+    try:
+        file_path = request.session.get('uploaded_file_path')
+        if not file_path:
+            return JsonResponse({
+                'success': False,
+                'error': 'No file path found in session'
+            })
 
+        # Read the uploaded file
+        data = pd.read_csv(file_path) if file_path.endswith('.csv') else pd.read_excel(file_path)
+
+        # Convert numpy types to Python native types
+        statistics = {
+            "columns": data.columns.tolist(),
+            "shape": [int(x) for x in data.shape],
+            "null_values": {k: int(v) for k, v in data.isnull().sum().items()},
+            "duplicates_count": int(data.duplicated().sum()),
+            "dtypes": {k: str(v) for k, v in data.dtypes.items()}
+        }
+
+        # Handle numeric analysis
+        numeric_data = data.select_dtypes(include=['number'])
+        if not numeric_data.empty:
+            statistics.update({
+                "mean_values": {k: float(v) for k, v in numeric_data.mean().items()},
+                "variance_values": {k: float(v) for k, v in numeric_data.var().items()},
+                "std_values": {k: float(v) for k, v in numeric_data.std().items()},
+                "correlation_with_all_variables": numeric_data.corr().to_dict()
+            })
+
+        # Handle categorical analysis
+        categorical_data = data.select_dtypes(include=['object', 'category'])
+        if not categorical_data.empty:
+            statistics["category_analysis"] = {
+                col: categorical_data[col].value_counts().to_dict()
+                for col in categorical_data.columns
+            }
+
+        # Store processed data in session
+        request.session['df'] = data.to_json(orient='records')
+
+        return JsonResponse({
+            'success': True,
+            'statistics': statistics
+        }, encoder=NumpyEncoder)
+    
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+    
 @login_required
 def clean_data(request):
     if request.method == 'POST':
