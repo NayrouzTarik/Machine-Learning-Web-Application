@@ -5,14 +5,549 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeThemeSwitcher();
     fetchWorkflowStats();
     initializeModelSelection();
-    addCollapsibleSectionStyles(); // Add this line to ensure styles are applied
+    addCollapsibleSectionStyles();
+    initializeTargetTypeSelection();
+    initializePlotting(); 
 });
 
-function initializeModelSelection() {
-    const modelButtons = document.querySelectorAll('.model-btn');
-    modelButtons.forEach(button => {
-        button.addEventListener('click', handleModelSelection);
+
+let currentChart = null; // Declare currentChart in the global scope
+
+function initializePlotting() {
+    const plotTypeSelect = document.getElementById('plot-type');
+    const xVariableSelect = document.getElementById('x-variable');
+    const yVariableSelect = document.getElementById('y-variable');
+    const generatePlotButton = document.getElementById('generate-plot');
+    const plotCanvas = document.getElementById('plot-canvas');
+    let variableTypes = {};
+
+    // Enhanced function to populate variables with validation and error handling
+    function populateVariables(variables) {
+        console.log('Starting populateVariables with:', variables);
+
+        // DOM element validation
+        if (!xVariableSelect) {
+            console.error('xVariableSelect not found in DOM');
+            return;
+        }
+        if (!yVariableSelect) {
+            console.error('yVariableSelect not found in DOM');
+            return;
+        }
+
+        // Input validation
+        if (!Array.isArray(variables)) {
+            console.error('Variables must be an array, received:', typeof variables);
+            return;
+        }
+
+        // Clear existing options
+        xVariableSelect.innerHTML = '<option value="">Select X Variable</option>';
+        yVariableSelect.innerHTML = '<option value="">Select Y Variable</option>';
+
+        // Reset variable types
+        variableTypes = {};
+
+        // Add new options with validation
+        variables.forEach((variable, index) => {
+            if (!variable || typeof variable !== 'object') {
+                console.error(`Invalid variable at index ${index}:`, variable);
+                return;
+            }
+
+            if (!variable.name) {
+                console.error(`Variable at index ${index} missing name property:`, variable);
+                return;
+            }
+
+            // Create and append options
+            const optionX = new Option(variable.name, variable.name);
+            const optionY = new Option(variable.name, variable.name);
+
+            try {
+                xVariableSelect.add(optionX);
+                yVariableSelect.add(optionY);
+                variableTypes[variable.name] = variable.type;
+                console.log(`Successfully added variable: ${variable.name}`);
+            } catch (error) {
+                console.error(`Error adding variable ${variable.name}:`, error);
+            }
+        });
+
+        // Verify population
+        console.log('Final state:', {
+            xOptionsCount: xVariableSelect.options.length,
+            yOptionsCount: yVariableSelect.options.length,
+            variableTypes: variableTypes
+        });
+    }
+
+    async function fetchVariables() {
+        try {
+            console.log('Starting fetchVariables');
+
+            // Verify CSRF token
+            const csrfToken = getCsrfToken();
+            if (!csrfToken) {
+                throw new Error('CSRF token not found');
+            }
+
+            const response = await fetch('/get-variables/', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('Received data:', data);
+
+            if (!data.success) {
+                throw new Error(data.error || 'Unknown error in response');
+            }
+
+            if (!data.variables || !Array.isArray(data.variables)) {
+                throw new Error('Invalid variables data received');
+            }
+
+            // Map the array of variable names to an array of objects
+            const variablesArray = data.variables.map(variable => ({ name: variable }));
+            populateVariables(variablesArray);
+        } catch (error) {
+            console.error('Error in fetchVariables:', error);
+            // Add visual feedback for users
+            if (xVariableSelect && yVariableSelect) {
+                const errorOption = new Option('Error loading variables', '');
+                xVariableSelect.innerHTML = '';
+                yVariableSelect.innerHTML = '';
+                xVariableSelect.add(errorOption.cloneNode(true));
+                yVariableSelect.add(errorOption.cloneNode(true));
+            }
+        }
+    }
+
+    // Initialize event listeners
+    document.addEventListener('fileUploaded', () => {
+        console.log('File upload event detected');
+        clearChart();
+        fetchVariables();
     });
+
+    // Add event listener for generating plot
+    generatePlotButton.addEventListener('click', async function() {
+        console.log('Generate plot clicked'); // Debug log
+        const plotType = plotTypeSelect.value;
+        const xVariable = xVariableSelect.value;
+        const yVariable = yVariableSelect.value;
+
+        console.log('Selected values:', { plotType, xVariable, yVariable }); // Debug log
+
+        try {
+            validatePlotRequirements(plotType, xVariable, yVariable);
+            clearChart();
+
+            const response = await fetch(
+                `/get-plot-data/?x_variable=${xVariable}&y_variable=${yVariable}&plot_type=${plotType}`,
+                {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    }
+                }
+            );
+
+            const data = await response.json();
+            if (data.success) {
+                const config = createChartConfig(plotType, xVariable, yVariable, data.plot_data);
+                currentChart = new Chart(plotCanvas.getContext('2d'), config);
+            } else {
+                throw new Error(data.error);
+            }
+        } catch (error) {
+            alert(error.message);
+            console.error('Error generating plot:', error);
+        }
+    });
+
+    // Initial fetch
+    console.log('Initializing plotting module');
+    fetchVariables();
+}
+
+function clearChart() {
+    if (currentChart) {
+        currentChart.destroy();
+        currentChart = null;
+    }
+}
+
+function validatePlotRequirements(plotType, xVariable, yVariable) {
+    // Add validation logic based on plot type and selected variables
+    if (!plotType) {
+        throw new Error('Please select a plot type.');
+    }
+    if (!xVariable) {
+        throw new Error('Please select an X variable.');
+    }
+    if (plotType !== 'histogram' && !yVariable) {
+        throw new Error('Please select a Y variable.');
+    }
+}
+
+function createChartConfig(plotType, xVariable, yVariable, plotData) {
+    // Add logic to create chart configuration based on plot type and data
+    let config = {};
+
+    switch (plotType) {
+        case 'histogram':
+            config = {
+                type: 'bar',
+                data: {
+                    labels: plotData.labels,
+                    datasets: [{
+                        label: xVariable,
+                        data: plotData.values,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            };
+            break;
+        case 'scatter':
+            config = {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: `Scatter Plot of ${xVariable} vs ${yVariable}`,
+                        data: plotData.points,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom'
+                        }
+                    }
+                }
+            };
+            break;
+        case 'bar':
+            config = {
+                type: 'bar',
+                data: {
+                    labels: plotData.labels,
+                    datasets: [{
+                        label: yVariable,
+                        data: plotData.values,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            };
+            break;
+        default:
+            throw new Error('Unsupported plot type.');
+    }
+
+    return config;
+}
+
+function clearChart() {
+    if (currentChart) {
+        currentChart.destroy();
+        currentChart = null;
+    }
+}
+
+function validatePlotRequirements(plotType, xVariable, yVariable) {
+    // Add validation logic based on plot type and selected variables
+    if (!plotType) {
+        throw new Error('Please select a plot type.');
+    }
+    if (!xVariable) {
+        throw new Error('Please select an X variable.');
+    }
+    if (plotType !== 'histogram' && !yVariable) {
+        throw new Error('Please select a Y variable.');
+    }
+}
+
+function createChartConfig(plotType, xVariable, yVariable, plotData) {
+    // Add logic to create chart configuration based on plot type and data
+    let config = {};
+
+    switch (plotType) {
+        case 'histogram':
+            config = {
+                type: 'bar',
+                data: {
+                    labels: plotData.labels,
+                    datasets: [{
+                        label: xVariable,
+                        data: plotData.values,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            };
+            break;
+        case 'scatter':
+            config = {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: `Scatter Plot of ${xVariable} vs ${yVariable}`,
+                        data: plotData.points,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom'
+                        }
+                    }
+                }
+            };
+            break;
+        case 'bar':
+            config = {
+                type: 'bar',
+                data: {
+                    labels: plotData.labels,
+                    datasets: [{
+                        label: yVariable,
+                        data: plotData.values,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            };
+            break;
+        default:
+            throw new Error('Unsupported plot type.');
+    }
+
+    return config;
+}
+
+
+
+function initializeTargetTypeSelection() {
+    const targetTypeSelect = document.getElementById('target-type');
+    const featuresNameTargetSelect = document.getElementById('features-name-target');
+
+    targetTypeSelect.addEventListener('change', () => {
+        const selectedTargetType = targetTypeSelect.value;
+        fetchCompatibleFeatures(selectedTargetType).then(features => {
+            populateFeaturesDropdown(featuresNameTargetSelect, features);
+        });
+    });
+}
+
+async function fetchCompatibleFeatures(targetType) {
+    try {
+        const response = await fetch('/get-compatible-features/', { 
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ target_type: targetType })
+        });
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        return data.features || [];
+    } catch (error) {
+        console.error('Error fetching compatible features:', error);
+        return [];
+    }
+}
+
+
+function populateFeaturesDropdown(dropdown, features) {
+    dropdown.innerHTML = ''; // Clear existing options
+    features.forEach(feature => {
+        const option = document.createElement('option');
+        option.value = feature.name;
+        option.textContent = `${feature.name} (${feature.dtype}, Unique: ${feature.unique_count})`;
+        dropdown.appendChild(option);
+    });
+}
+
+async function initializeModelSelection() {
+    const targetTypeSelect = document.getElementById('target-type');
+    const featuresSelect = document.getElementById('features-name-target');
+    const modelButtons = document.querySelectorAll('.model-btn');
+
+    // Initialize with current data
+    await updateFeatures(targetTypeSelect.value);
+
+    targetTypeSelect.addEventListener('change', async (e) => {
+        const selectedType = e.target.value;
+        const recommendation = document.getElementById('dataTypeRecommendation').textContent;
+
+        if (selectedType !== recommendation) {
+            if (!confirm('This differs from the recommended type. Continue?')) {
+                e.preventDefault();
+                targetTypeSelect.value = recommendation;
+                return;
+            }
+        }
+
+        await updateFeatures(selectedType);
+        updateAvailableModels(selectedType);
+    });
+
+    modelButtons.forEach(button => {
+        button.addEventListener('click', async () => {
+            const model = button.dataset.model;
+            const targetType = targetTypeSelect.value;
+            const selectedFeature = featuresSelect.value;
+
+            try {
+                const response = await fetch('/run-model/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        target_type: targetType,
+                        features_name_target: selectedFeature
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    displayModelResults(result.results);
+                } else {
+                    showError(result.error);
+                }
+            } catch (error) {
+                showError('Failed to run model: ' + error.message);
+            }
+        });
+    });
+}
+
+async function updateFeatures(targetType) {
+    const featuresSelect = document.getElementById('features-name-target');
+    featuresSelect.disabled = true;
+    featuresSelect.innerHTML = '<option value="">Loading...</option>';
+
+    try {
+        const response = await fetch('/get-compatible-features/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ target_type: targetType })
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        // Update recommendation
+        document.getElementById('dataTypeRecommendation').textContent = data.recommendation;
+
+        // Update features dropdown
+        featuresSelect.innerHTML = '';
+        data.features.forEach(feature => {
+            const option = document.createElement('option');
+            option.value = feature.name;
+            option.textContent = `${feature.name} (${feature.dtype})`;
+            featuresSelect.appendChild(option);
+        });
+
+        featuresSelect.disabled = targetType === 'clustering';
+
+    } catch (error) {
+        showError(error.message);
+    }
+}
+
+function updateAvailableModels(targetType) {
+    const modelButtons = document.querySelectorAll('.model-btn');
+    const validModels = {
+        'classification': ['decision-tree', 'svm', 'random-forest', 'knn', 'neural-network', 'naive-bayes'],
+        'regression': ['regression', 'neural-network', 'random-forest', 'svm'],
+        'clustering': ['k-means']
+    };
+
+    modelButtons.forEach(button => {
+        const model = button.dataset.model;
+        if (validModels[targetType].includes(model)) {
+            button.style.display = 'block';
+            button.disabled = false;
+        } else {
+            button.style.display = 'none';
+            button.disabled = true;
+        }
+    });
+}
+
+function getCsrfToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+}
+
+function showError(message) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-message';
+    errorDiv.textContent = message;
+    document.querySelector('.model-category').prepend(errorDiv);
+    setTimeout(() => errorDiv.remove(), 5000);
 }
 
 let cleanedData = null;
@@ -71,24 +606,27 @@ function handleModelSelection(event) {
 
 function runModel(selectedModel) {
     const data = {
-        model: selectedModel
+        model: selectedModel,
+        target_type: document.getElementById('target-type').value,
+        features_name_target: document.getElementById('features-name-target').value
     };
 
-    console.log('Running model:', selectedModel);
-
-    fetch('/run_model/', {
+    fetch('/run-model/', {  // Update URL
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            'X-CSRFToken': getCsrfToken()
         },
         body: JSON.stringify(data)
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        return response.json();
+    })
     .then(data => {
         if (data.success && data.results) {
-            console.log('Model results:', data.results);
             updateVisualization(data.results);
+            saveModelRun(selectedModel, data.results, modelHistory.currentCSV?.fileName || 'Unknown');
         } else {
             throw new Error(data.error || 'Unknown error occurred');
         }
@@ -101,7 +639,7 @@ function runModel(selectedModel) {
 
 function updateVisualization(results) {
     const metricsChart = document.getElementById('metrics-chart');
-    
+
     if (!results || !metricsChart) return;
 
     let data, layout;
@@ -128,7 +666,7 @@ function updateVisualization(results) {
             font: { color: '#fff' },
             margin: { t: 50, b: 50, l: 50, r: 50 }
         };
-    } 
+    }
     else if ('train_score' in results) {
         // Model performance metrics
         data = [{
@@ -707,7 +1245,6 @@ function handleLogout(event) {
     }
 }
 
-
 // testing history
 let modelHistory = {
     models: [],
@@ -753,20 +1290,6 @@ function updateHistoryDisplay() {
     if (!historySection) return;
 
     let html = '<div class="history-container">';
-    
-    // CSV History
-    html += '<div class="csv-history">';
-    html += '<h3>CSV History</h3>';
-    modelHistory.csvs.forEach(csv => {
-        html += `
-            <div class="history-item">
-                <span>${csv.fileName}</span>
-                <span>${csv.timestamp}</span>
-                <button onclick="downloadCSV('${csv.id}')">Download</button>
-            </div>
-        `;
-    });
-    html += '</div>';
 
     // Model History
     html += '<div class="model-history">';
@@ -782,7 +1305,7 @@ function updateHistoryDisplay() {
         `;
     });
     html += '</div>';
-    
+
     historySection.innerHTML = html;
 }
 
@@ -833,5 +1356,3 @@ function runModel(selectedModel) {
         alert(`Model execution failed: ${error.message}`);
     });
 }
-
-document.addEventListener('DOMContentLoaded', loadHistory);

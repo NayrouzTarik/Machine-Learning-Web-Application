@@ -364,7 +364,6 @@ def detect_problem_type(df):
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     categorical_cols = df.select_dtypes(include=['object', 'category']).columns
     
-    # Count columns that look like categorical targets
     potential_categorical_targets = len([col for col in numeric_cols 
                                       if df[col].nunique() < categorical_threshold])
     
@@ -375,3 +374,138 @@ def detect_problem_type(df):
     else:
         return 'clustering'
 
+@csrf_exempt
+def get_variables(request):
+    try:
+        df_json = request.session.get('df')
+        if not df_json:
+            return JsonResponse({'error': 'No data available'}, status=400)
+
+        df = pd.read_json(df_json)
+        variables = df.columns.tolist()
+
+        return JsonResponse({
+            'success': True,
+            'variables': variables
+        })
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def get_plot_data(request):
+    try:
+        x_variable = request.GET.get('x_variable')
+        y_variable = request.GET.get('y_variable')
+        plot_type = request.GET.get('plot_type')
+
+        df_json = request.session.get('df')
+        if not df_json:
+            return JsonResponse({'success': False, 'error': 'No data available'}, status=400)
+
+        df = pd.read_json(df_json)
+
+        # Validate columns exist
+        if x_variable not in df.columns:
+            return JsonResponse({
+                'success': False, 
+                'error': f'Column {x_variable} not found in dataset'
+            }, status=400)
+
+        if y_variable and y_variable not in df.columns:
+            return JsonResponse({
+                'success': False, 
+                'error': f'Column {y_variable} not found in dataset'
+            }, status=400)
+
+        if plot_type == 'histogram':
+            # Handle different data types for histogram
+            if pd.api.types.is_numeric_dtype(df[x_variable]):
+                # For numeric data, use value_counts with bins
+                counts = pd.cut(df[x_variable], bins=10).value_counts().sort_index()
+                labels = [str(interval) for interval in counts.index]
+                values = counts.values.tolist()
+            else:
+                # For categorical data, use simple value_counts
+                counts = df[x_variable].value_counts()
+                labels = counts.index.astype(str).tolist()
+                values = counts.values.tolist()
+
+            data = {
+                'labels': labels,
+                'datasets': [{
+                    'label': x_variable,
+                    'data': values,
+                    'backgroundColor': 'rgba(75, 192, 192, 0.2)',
+                    'borderColor': 'rgba(75, 192, 192, 1)',
+                    'borderWidth': 1
+                }]
+            }
+
+        elif plot_type == 'scatter':
+            # Validate both variables are numeric for scatter plot
+            if not (pd.api.types.is_numeric_dtype(df[x_variable]) and 
+                   pd.api.types.is_numeric_dtype(df[y_variable])):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Both variables must be numeric for scatter plot'
+                }, status=400)
+
+            data = {
+                'datasets': [{
+                    'label': 'Scatter Plot',
+                    'data': [{'x': x, 'y': y} for x, y in zip(
+                        df[x_variable].tolist(), 
+                        df[y_variable].tolist()
+                    )],
+                    'backgroundColor': 'rgba(75, 192, 192, 0.2)',
+                    'borderColor': 'rgba(75, 192, 192, 1)',
+                    'pointRadius': 5
+                }]
+            }
+
+        elif plot_type == 'bar':
+            if y_variable:
+                # If y_variable is provided, use it for values
+                data = {
+                    'labels': df[x_variable].astype(str).tolist(),
+                    'datasets': [{
+                        'label': y_variable,
+                        'data': df[y_variable].tolist(),
+                        'backgroundColor': 'rgba(75, 192, 192, 0.2)',
+                        'borderColor': 'rgba(75, 192, 192, 1)',
+                        'borderWidth': 1
+                    }]
+                }
+            else:
+                # If no y_variable, use counts of x_variable
+                counts = df[x_variable].value_counts()
+                data = {
+                    'labels': counts.index.astype(str).tolist(),
+                    'datasets': [{
+                        'label': f'{x_variable} Count',
+                        'data': counts.values.tolist(),
+                        'backgroundColor': 'rgba(75, 192, 192, 0.2)',
+                        'borderColor': 'rgba(75, 192, 192, 1)',
+                        'borderWidth': 1
+                    }]
+                }
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': 'Unsupported plot type'
+            }, status=400)
+
+        return JsonResponse({
+            'success': True,
+            'plot_data': data
+        })
+
+    except Exception as e:
+        import traceback
+        print(f"Error in get_plot_data: {str(e)}")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

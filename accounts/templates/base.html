@@ -1,7 +1,6 @@
 {% extends 'base_layout.html' %}
 {% load static %}
 
-{% block head %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,17 +8,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Data Science Workflow Platform</title>
     <link rel="stylesheet" href="{% static 'base.css' %}">
-    <script src="{% static 'scripts.js' %}" defer></script>
+    <!-- <script src="{% static 'scripts.js' %}" defer></script> -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.2/xlsx.full.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.2/xlsx.full.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <script src="{% static 'table.js' %}"></script>
+    <!-- <script src="{% static 'table.js' %}"></script> -->
 </head>
-{% endblock %}
-
-{% block content %}
 <body>
+    {% block head %}
+    {% endblock %}
+
+    {% block content %}
     <nav class="main-sidebar">
         <div class="sidebar-menu">
             <div class="nav-item active" data-page="account">
@@ -36,7 +35,8 @@
                 <span>History</span>
             </div>
 
-            <div class="nav-item workflow-trigger" data-page="workflow">                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div class="nav-item workflow-trigger" data-page="workflow">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
                 <span>Workflow</span>
@@ -61,14 +61,14 @@
                     <h1>{{ request.user.username }}</h1>
                     <p>Email: <span id="user-email-display">{{ request.user.email }}</span></p>
                 </div>
-        
+
                 <div class="statistics">
                     <h3>User Statistics</h3>
                     <ul>
                         <li>Workflow Completed: <span id="workflow-stat">Fetching...</span></li>
                     </ul>
                 </div>
-        
+
                 <div class="theme-selector">
                     <h3>Theme</h3>
                     <label>
@@ -88,7 +88,7 @@
         <section id="history-section" class="section-container">
             <div class="history-container">
                 <h1>Your Recent Activity</h1>
-        
+
                 <div class="history-section">
                     <h2>Recent Files</h2>
                     <div class="history-list">
@@ -114,7 +114,7 @@
                         {% endif %}
                     </div>
                 </div>
-        
+
                 <div class="history-section">
                     <h2>Workflow History</h2>
                     <div class="workflow-timeline">
@@ -142,7 +142,8 @@
                 </div>
             </div>
         </section>
-        <!-- i should add %% to the one that scrap from%% -->
+
+        <!-- Workflow Section -->
         <section id="workflow-section" class="section-container">
             <div class="workflow-container">
                 <!-- Upload Section -->
@@ -150,11 +151,12 @@
                     <div class="step-content">
                         <h2>Data Input</h2>
                         <div class="split-container">
+                            <!-- Left Side: Upload Section -->
                             <div class="upload-section">
                                 <div class="upload-area">
                                     <h3>Upload File</h3>
                                     <p>Import your data from a file</p>
-                                    <form id="upload-form" enctype="multipart/form-data">
+                                    <form id="upload-form" action="{% url 'upload_data' %}" method="post" enctype="multipart/form-data">
                                         {% csrf_token %}
                                         <div class="file-upload-wrapper">
                                             <div class="upload-icon">
@@ -165,10 +167,11 @@
                                                 <input type="file" id="file-upload" name="file" accept=".csv, .xls, .xlsx, .json, .sql" />
                                             </div>
                                         </div>
-                                        <button type="submit" action="{% url 'upload_data' %}">Upload File</button>
+                                        <button type="submit">Upload File</button>
                                     </form>
                                 </div>
                             </div>
+                            <!-- Right Side: Table Creation Section -->
                             <div class="table-section">
                                 <div class="table-creation-area">
                                     <h3>Create Table</h3>
@@ -196,12 +199,12 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="step-buttons">
-                            <button class="next-step" data-next="exploration-section">Next Step</button>
-                        </div>
+                    </div>
+                    <div class="step-buttons">
+                        <button class="next-step" data-next="exploration-section">Next Step</button>
                     </div>
                 </div>
-        
+
                 <!-- Exploration Section -->
                 <div id="exploration-section" class="workflow-content">
                     <div class="step-content">
@@ -217,13 +220,48 @@
                             </div>
                         </div>
                         <div class="step-buttons">
+                            <button class="prev-step" data-prev="upload-section">Prev Step</button>
+                            <button class="next-step" data-next="plot-section">Next Step</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Plot Section -->
+                <div id="plot-section" class="workflow-content">
+                    <div class="step-content">
+                        <h2>Data Plots</h2>
+                        <div class="plot-controls">
+                            <label for="plot-type">Select Plot Type:</label>
+                            <select id="plot-type">
+                                <option value="histogram">Histogram</option>
+                                <option value="scatter">Scatter Plot</option>
+                                <option value="bar">Bar Chart</option>
+                                <!-- Add more plot types as needed -->
+                            </select>
+            
+                            <label for="x-variable">Select X Variable:</label>
+                            <select id="x-variable">
+                                <!-- Options will be populated dynamically -->
+                            </select>
+            
+                            <label for="y-variable">Select Y Variable:</label>
+                            <select id="y-variable">
+                                <!-- Options will be populated dynamically -->
+                            </select>
+            
+                            <button id="generate-plot">Generate Plot</button>
+                        </div>
+                        <div class="plot-container">
+                            <canvas id="plot-canvas"></canvas>
+                        </div>
+                        <div class="step-buttons">
                             <button class="prev-step" data-prev="exploration-section">Prev Step</button>
-                            <button class="next-step" data-next="selection-section" onclick="return cleanData()">Next Step</button>
+                            <button class="next-step" data-next="selection-section">Next Step</button>
                         </div>
                     </div>
                 </div>
                 
-        
+
                 <!-- Selection Section -->
                 <div id="selection-section" class="workflow-content">
                     <div class="step-content">
@@ -231,31 +269,42 @@
                         <div class="data-guidance">
                             <p>Data Type Recommendation: <span id="dataTypeRecommendation"></span></p>
                         </div>
+                        <div class="target-selection">
+                            <label for="target-type">Select Target Type:</label>
+                            <select id="target-type">
+                                <option value="classification">Classification</option>
+                                <option value="clustering">Clustering</option>
+                                <option value="regression">Regression</option>
+                            </select>
+                        </div>
+                        <div class="features-selection">
+                            <label for="features-name-target">Select Feature:</label>
+                            <select id="features-name-target">
+                                <!-- Options will be dynamically inserted here -->
+                            </select>
+                        </div>
                         <div class="models-container">
-                            <div class="models-container">
-                                <div class="model-category">
-                                    <h3>Models</h3>
-                                    <div class="model-grid">
-                                        <button class="model-btn" data-model="decision-tree">Decision Tree</button>
-                                        <button class="model-btn" data-model="svm">SVM</button>
-                                        <button class="model-btn" data-model="random-forest">Random Forest</button>
-                                        <button class="model-btn" data-model="knn">KNN</button>
-                                        <button class="model-btn" data-model="neural-network">Neural Network</button>
-                                        <button class="model-btn" data-model="K-Means">K-Means</button>
-                                        <button class="model-btn" data-model="naive-bayes">Naive Bayes</button>
-                                        <button class="model-btn" data-model="regression">Regression</button>
-                                    </div>
-                                    
-                                </div> 
+                            <div class="model-category">
+                                <h3>Models</h3>
+                                <div class="model-grid">
+                                    <button class="model-btn" data-model="decision-tree">Decision Tree</button>
+                                    <button class="model-btn" data-model="svm">SVM</button>
+                                    <button class="model-btn" data-model="random-forest">Random Forest</button>
+                                    <button class="model-btn" data-model="knn">KNN</button>
+                                    <button class="model-btn" data-model="neural-network">Neural Network</button>
+                                    <button class="model-btn" data-model="k-means">K-Means</button>
+                                    <button class="model-btn" data-model="naive-bayes">Naive Bayes</button>
+                                    <button class="model-btn" data-model="regression">Regression</button>
+                                </div>
                             </div>
                         </div>
                         <div class="step-buttons">
-                            <button class="prev-step" data-prev="exploration-section">Prev Step</button>
+                            <button class="prev-step" data-prev="plot-section">Prev Step</button>
                             <button class="next-step" data-next="visualization-section">Next Step</button>
                         </div>
                     </div>
                 </div>
-        
+
                 <!-- Visualization Section -->
                 <div id="visualization-section" class="workflow-content">
                     <div class="step-content">
@@ -266,13 +315,13 @@
                         </div>
                         <div class="step-buttons">
                             <button class="prev-step" data-prev="selection-section">Prev Step</button>
-                            <button class="next-step" data-next="rapport-section">Next Step</button>
+                            <button class="next-step" data-next="report-section">Next Step</button>
                         </div>
                     </div>
                 </div>
-        
+
                 <!-- Report Section -->
-                <div id="rapport-section" class="workflow-content">
+                <div id="report-section" class="workflow-content">
                     <div class="step-content">
                         <h2>Report</h2>
                         <div class="report-container">
@@ -301,6 +350,7 @@
                 </div>
             </div>
         </section>
+    </main>
+    {% endblock %}
 </body>
-{% endblock %}
 </html>

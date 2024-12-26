@@ -14,6 +14,8 @@ urlpatterns = [
     path('upload/', mlapp_views.upload_data, name='upload_data'),
     path('clean_data/', mlapp_views.clean_data, name='clean_data'),
     path('run_model/', mlapp_views.run_model, name='run_model'),
-    path('get-compatible-features', mlapp_views.get_compatible_features, name='get-compatible-features'),
     path('admin/', admin.site.urls),
+    path('get-compatible-features/', mlapp_views.get_compatible_features, name='get_compatible_features'),
+    path('get-variables/', mlapp_views.get_variables, name='get_variables'),
+    path('get-plot-data/', mlapp_views.get_plot_data, name='get_plot_data'),
 ]
